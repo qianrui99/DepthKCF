@@ -29,6 +29,8 @@ History:   <author>    <date>   <modification>
 
 #include "kcftracker.hpp"
 
+#include "usart.h"
+
 using namespace sl;
 
 
@@ -58,25 +60,36 @@ int main(int argc, char **argv) {
 	bool MULTISCALE = true;
 	bool LAB = false;
 	
+	char certrex[2],certrey[2];
+	
 	cv::Point pos = cv::Point(20,20);				//The Position of Text
 /*========================*/
 //目标统计，检测到的目标数
     int  nframes = 0;
 
 
+/*==========================USART===================================*/
+	int fd;                            //文件描述符    
+	int len;                            
+	int i;
+				 
+	//char send_buf[20]="tiger john";    
+	char send_buf[6];  
+
+	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
+	
+/*=================================================================*/
 	// Create KCFTracker object ......
 	KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
 
 	
     // Create a ZED camera object
     Camera zed;
-
     // Set configuration parameters
     InitParameters init_params;
     init_params.camera_resolution = RESOLUTION_VGA;   //RESOLUTION_VGA 100fps;RESOLUTION_HD720 60fps
     init_params.depth_mode = DEPTH_MODE_PERFORMANCE;
-    init_params.coordinate_units = UNIT_METER;
-    
+    init_params.coordinate_units = UNIT_METER;    
     // Open the camera
     ERROR_CODE err = zed.open(init_params);
     if (err != SUCCESS) {
@@ -129,7 +142,6 @@ int main(int argc, char **argv) {
 			cv::cvtColor(image_ocv,image,cv::COLOR_BGRA2BGR);
 			cv::cvtColor(depth_image_ocv,depth,cv::COLOR_BGRA2BGR);
 			
-			
 			if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
 				drawBox(image,box);
 				cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.8,(10,255,255),2,CV_AA);
@@ -144,7 +156,26 @@ int main(int argc, char **argv) {
 					}
 					if(nframes>=2) {
 						result = tracker.update(image);
-						printf("target box = x:%d y:%d h:%d w:%d\n",result.x,result.y,result.width,result.height);
+						certrex[0] = result.x  >> 8;
+						certrex[1] = result.x & 0xff;
+						certrey[0] = result.y   >> 8;
+						certrey[1] = result.y & 0xff;	
+						
+						send_buf[0] = 10;
+						send_buf[1] = 11;					
+						send_buf[2] = certrex[0];
+						send_buf[3] = certrex[1];
+						send_buf[4] = certrey[0];
+						send_buf[5] = certrey[1]; 
+						
+				len = UART0_Send(fd,send_buf,6);   
+				if(len > 0)    
+					printf(" %d time send %d data successful\n",i,len);    
+				else    
+					printf("send data failed!\n");    
+						//printf("target box = x:%d y:%d h:%d w:%d\n",result.x,result.y,result.width,result.height);
+						printf("%x,%x,%x,%x\n",certrex[0],certrex[1],certrey[0],certrey[1]);
+						
 						drawBox( image,result);
 						cv::putText(image," ESC: Exit Program!  r: Reset The Program! ",pos,cv::FONT_HERSHEY_TRIPLEX,0.8,(10,255,255),2,CV_AA);
 						cv::imshow("KCF", image);
