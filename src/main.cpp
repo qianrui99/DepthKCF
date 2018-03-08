@@ -36,7 +36,7 @@ using namespace sl;
 
 #define FRAME_WIDTH  640
 #define FRAME_HEIGHT 480
-#define MIN_WIN 15  	
+#define MIN_WIN 15  
 
 
 cv::Rect result(0,0,0,0);
@@ -70,12 +70,10 @@ int main(int argc, char **argv) {
 
 /*==========================USART===================================*/
 	int fd;                            //文件描述符    
-	int len;                            
-	int i;
-				 
-	//char send_buf[20]="tiger john";    
-	char send_buf[6];  
-
+	int len;       
+	 
+	char send_buf[6];  //send buffer for usart			   
+	int checkout=0;		//checkout bits
 	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
 	
 /*=================================================================*/
@@ -168,11 +166,10 @@ int main(int argc, char **argv) {
 						send_buf[4] = certrey[0];
 						send_buf[5] = certrey[1]; 
 						
-				len = UART0_Send(fd,send_buf,6);   
-				if(len > 0)    
-					printf(" %d time send %d data successful\n",i,len);    
-				else    
-					printf("send data failed!\n");    
+						len = UART0_Send(fd,send_buf,6);   
+						if(len > 0)    
+							printf("Send %d data successful\n",len);    
+	 
 						//printf("target box = x:%d y:%d h:%d w:%d\n",result.x,result.y,result.width,result.height);
 						printf("%x,%x,%x,%x\n",certrex[0],certrex[1],certrey[0],certrey[1]);
 						
