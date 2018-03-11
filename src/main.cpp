@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
 	bool MULTISCALE = true;
 	bool LAB = false;
 	
-	char certrex[2],certrey[2];
+	int certrex,certrey;
 	
 	cv::Point pos = cv::Point(20,20);				//The Position of Text
 /*========================*/
@@ -71,11 +71,13 @@ int main(int argc, char **argv) {
 /*==========================USART===================================*/
 	int fd;                            //文件描述符    
 	int len;       
-	 
-	char send_buf[6];  //send buffer for usart			   
+	unsigned char stopData[4]={0}; 
+	unsigned char data[4]={0};  //send buffer for usart	
+	unsigned char end[2]={0};
+			   
 	int checkout=0;		//checkout bits
 	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
-	
+	UART0_Init(fd,115200,0,8,1,'N');
 /*=================================================================*/
 	// Create KCFTracker object ......
 	KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
@@ -142,10 +144,11 @@ int main(int argc, char **argv) {
 			
 			if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
 				drawBox(image,box);
-				cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.8,(10,255,255),2,CV_AA);
+				cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
 				cv::imshow("KCF", image);
 				printf("image width:%d,height:%d\n",image.cols,image.rows);
 				printf("Initial Bounding Box = x:%d y:%d h:%d w:%d\n,size:%d", box.x, box.y, box.width, box.height,sizeof(box));	
+				UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);
 			} else {
 					// First frame, give the groundtruth to the tracker
 					if(nframes<2) {
@@ -154,27 +157,31 @@ int main(int argc, char **argv) {
 					}
 					if(nframes>=2) {
 						result = tracker.update(image);
-						certrex[0] = result.x  >> 8;
+				/*		certrex[0] = result.x  >> 8;
 						certrex[1] = result.x & 0xff;
 						certrey[0] = result.y   >> 8;
 						certrey[1] = result.y & 0xff;	
+				*/				
+						certrex = result.x+result.width/2;
+						certrey = result.y+result.height/2;
+						data[0] = certrex  >> 8;;
+						data[1] = certrex & 0x000000ff;
+						data[2] = certrey   >> 8;
+						data[3] = certrey & 0x000000ff;
+//						data[4] = (result.x +result.y)>>8;
+//						data[5] = (result.x +result.y)& 0x000000ff;	
 						
-						send_buf[0] = 10;
-						send_buf[1] = 11;					
-						send_buf[2] = certrex[0];
-						send_buf[3] = certrex[1];
-						send_buf[4] = certrey[0];
-						send_buf[5] = certrey[1]; 
 						
-						len = UART0_Send(fd,send_buf,6);   
-						if(len > 0)    
-							printf("Send %d data successful\n",len);    
-	 
-						//printf("target box = x:%d y:%d h:%d w:%d\n",result.x,result.y,result.width,result.height);
-						printf("%x,%x,%x,%x\n",certrex[0],certrex[1],certrey[0],certrey[1]);
+						end[0] = 0x0D;
+						end[1] = 0x0A;	
+						UART0_Send(fd,data,4); 
+						UART0_Send(fd,end,2); 
+						
+						printf("certrex:%d certrey:%d\n",certrex,certrey);
+						//printf("%x,%x,%x,%x,%x,%x,%x,%x\n",data[0],data[1],data[2],data[3],end[0],end[1]);
 						
 						drawBox( image,result);
-						cv::putText(image," ESC: Exit Program!  r: Reset The Program! ",pos,cv::FONT_HERSHEY_TRIPLEX,0.8,(10,255,255),2,CV_AA);
+						cv::putText(image," ESC: Exit Program!  r: Reset The Program! ",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
 						cv::imshow("KCF", image);
 						nframes=3;
 					}
@@ -184,15 +191,14 @@ int main(int argc, char **argv) {
             key = cv::waitKey(10);
             
 			switch(key) {
-				case 'r':
-				gotBB = false;
-				nframes = 0;
-				break;
+				case 'r':gotBB = false;nframes = 0;break;
+				case 'p':UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);cv::waitKey(5000);break;
+				
 			}
 
             t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
 			Fps = 1.0 / t;
-			printf("FPS: %.2f\n",Fps);
+			//printf("FPS: %.2f\n",Fps);
         }
     }
     zed.close();

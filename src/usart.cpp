@@ -206,7 +206,7 @@ int UART0_Init(int fd, int speed,int flow_ctrl,int databits,int stopbits,int par
 {    
 	int err;    
 	//设置串口数据帧格式    
-	if (UART0_Set(fd,9600,0,8,1,'N') == FALSE)    
+	if (UART0_Set(fd,115200,0,8,1,'N') == FALSE)    
 	{                                                             
 		return FALSE;    
 	}    
@@ -260,14 +260,13 @@ int UART0_Recv(int fd, char *rcv_buf,int data_len)
 *                              data_len    :一帧数据的个数  
 * 出口参数：        正确返回为1，错误返回为0  
 *******************************************************************/    
-int UART0_Send(int fd, char *send_buf,int data_len)    
+int UART0_Send(int fd, unsigned char *send_buf,int data_len)    
 {    
 	int len = 0;    
 	   
 	len = write(fd,send_buf,data_len);    
 	if (len == data_len )    
 	{    
-		printf("send data is %s\n",send_buf);  
 		return len;    
 	}         
 	else       
