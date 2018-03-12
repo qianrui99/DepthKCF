@@ -61,6 +61,7 @@ int main(int argc, char **argv) {
 	bool LAB = false;
 	
 	int certrex,certrey;
+	float certrez=0;
 	
 	cv::Point pos = cv::Point(20,20);				//The Position of Text
 /*========================*/
@@ -136,7 +137,7 @@ int main(int argc, char **argv) {
 
             // Retrieve the RGBA point cloud in half-resolution
             // To learn how to manipulate and display point clouds, see Depth Sensing sample
-            //zed.retrieveMeasure(point_cloud, MEASURE_XYZRGBA, MEM_CPU, new_width, new_height);
+            zed.retrieveMeasure(point_cloud, MEASURE_XYZRGBA, MEM_CPU, new_width, new_height);
 
 			//Notice:There has transfer the TYPE_8U_C4 to TYPE_8U_C3
 			cv::cvtColor(image_ocv,image,cv::COLOR_BGRA2BGR);
@@ -176,8 +177,10 @@ int main(int argc, char **argv) {
 						end[1] = 0x0A;	
 						UART0_Send(fd,data,4); 
 						UART0_Send(fd,end,2); 
-						
-						printf("certrex:%d certrey:%d\n",certrex,certrey);
+						sl::float4 point_cloud_value;
+						point_cloud.getValue(certrex, certrey, &point_cloud_value);
+						certrez = sqrt(point_cloud_value.x*point_cloud_value.x + point_cloud_value.y*point_cloud_value.y + point_cloud_value.z*point_cloud_value.z);
+						printf("certrex:%d certrey:%d certrez:%.2f\n",certrex,certrey,certrez);
 						//printf("%x,%x,%x,%x,%x,%x,%x,%x\n",data[0],data[1],data[2],data[3],end[0],end[1]);
 						
 						drawBox( image,result);
