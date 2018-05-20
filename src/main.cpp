@@ -28,7 +28,6 @@ History:   <author>    <date>   <modification>
 /*==============[ADD][KCF][2017-6-3]=====================*/
 
 #include "kcftracker.hpp"
-
 #include "usart.h"
 
 using namespace sl;
@@ -79,7 +78,11 @@ int main(int argc, char **argv) {
 	int checkout=0;		//checkout bits
 	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
 	UART0_Init(fd,115200,0,8,1,'N');
-/*=================================================================*/
+/*==========================Socket===================================*/
+
+
+    
+/*==================================================================*/    
 	// Create KCFTracker object ......
 	KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
 
@@ -88,7 +91,7 @@ int main(int argc, char **argv) {
     Camera zed;
     // Set configuration parameters
     InitParameters init_params;
-    init_params.camera_resolution = RESOLUTION_VGA;   //RESOLUTION_VGA 100fps;RESOLUTION_HD720 60fps
+    init_params.camera_resolution = RESOLUTION_HD720;   //RESOLUTION_VGA 100fps;RESOLUTION_HD720 60fps
     init_params.depth_mode = DEPTH_MODE_PERFORMANCE;
     init_params.coordinate_units = UNIT_METER;    
     // Open the camera
@@ -122,87 +125,94 @@ int main(int argc, char **argv) {
     // Loop until 'q' is pressed
     char key = ' ';
     
-	cv::Mat image, grayImage, blurImage, depth;
+    cv::Mat image, grayImage, blurImage, depth;
     while (key != 'q') {
-        if (zed.grab(runtime_parameters) == SUCCESS) {
-			t = (double)cv::getTickCount(); 
-			
-			cvNamedWindow("KCF", 1);
-			cvSetMouseCallback("KCF", mouseHandler);
+	if (zed.grab(runtime_parameters) == SUCCESS) {
+	    t = (double)cv::getTickCount(); 
 
-			
-            // Retrieve the left image, depth image in half-resolution
-            zed.retrieveImage(image_zed, VIEW_LEFT, MEM_CPU, new_width, new_height);
-            zed.retrieveImage(depth_image_zed, VIEW_DEPTH, MEM_CPU, new_width, new_height);
+	    cvNamedWindow("KCF", 1);
+	    cvSetMouseCallback("KCF", mouseHandler);
 
-            // Retrieve the RGBA point cloud in half-resolution
-            // To learn how to manipulate and display point clouds, see Depth Sensing sample
-            zed.retrieveMeasure(point_cloud, MEASURE_XYZRGBA, MEM_CPU, new_width, new_height);
 
-			//Notice:There has transfer the TYPE_8U_C4 to TYPE_8U_C3
-			cv::cvtColor(image_ocv,image,cv::COLOR_BGRA2BGR);
-			cv::cvtColor(depth_image_ocv,depth,cv::COLOR_BGRA2BGR);
-			
-			if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
-				drawBox(image,box);
-				cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
-				cv::imshow("KCF", image);
-				printf("image width:%d,height:%d\n",image.cols,image.rows);
-				printf("Initial Bounding Box = x:%d y:%d h:%d w:%d\n,size:%d", box.x, box.y, box.width, box.height,sizeof(box));	
-				UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);
-			} else {
-					// First frame, give the groundtruth to the tracker
-					if(nframes<2) {
-						nframes++;
-						tracker.init(box, image);
-					}
-					if(nframes>=2) {
-						result = tracker.update(image);
-				/*		certrex[0] = result.x  >> 8;
-						certrex[1] = result.x & 0xff;
-						certrey[0] = result.y   >> 8;
-						certrey[1] = result.y & 0xff;	
-				*/				
-						certrex = result.x+result.width/2;
-						certrey = result.y+result.height/2;
-						data[0] = certrex  >> 8;;
-						data[1] = certrex & 0x000000ff;
-						data[2] = certrey   >> 8;
-						data[3] = certrey & 0x000000ff;
-//						data[4] = (result.x +result.y)>>8;
-//						data[5] = (result.x +result.y)& 0x000000ff;	
-						
-						
-						end[0] = 0x0D;
-						end[1] = 0x0A;	
-						UART0_Send(fd,data,4); 
-						UART0_Send(fd,end,2); 
-						sl::float4 point_cloud_value;
-						point_cloud.getValue(certrex, certrey, &point_cloud_value);
-						certrez = sqrt(point_cloud_value.x*point_cloud_value.x + point_cloud_value.y*point_cloud_value.y + point_cloud_value.z*point_cloud_value.z);
-						printf("certrex:%d certrey:%d certrez:%.2f\n",certrex,certrey,certrez);
-						//printf("%x,%x,%x,%x,%x,%x,%x,%x\n",data[0],data[1],data[2],data[3],end[0],end[1]);
-						
-						drawBox( image,result);
-						cv::putText(image," ESC: Exit Program!  r: Reset The Program! ",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
-						cv::imshow("KCF", image);
-						nframes=3;
-					}
-			}
-			cv::imshow("depth", depth);
-            // Handle key event
-            key = cv::waitKey(10);
-            
-			switch(key) {
-				case 'r':gotBB = false;nframes = 0;break;
-				case 'p':UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);cv::waitKey(5000);break;
-				
-			}
+	    // Retrieve the left image, depth image in half-resolution
+	    zed.retrieveImage(image_zed, VIEW_LEFT, MEM_CPU, new_width, new_height);
+	    zed.retrieveImage(depth_image_zed, VIEW_DEPTH, MEM_CPU, new_width, new_height);
 
-            t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
-			Fps = 1.0 / t;
-			//printf("FPS: %.2f\n",Fps);
-        }
+	    // Retrieve the RGBA point cloud in half-resolution
+	    // To learn how to manipulate and display point clouds, see Depth Sensing sample
+	    zed.retrieveMeasure(point_cloud, MEASURE_XYZRGBA, MEM_CPU, new_width, new_height);
+
+	    //Notice:There has transfer the TYPE_8U_C4 to TYPE_8U_C3
+	    cv::cvtColor(image_ocv,image,cv::COLOR_BGRA2BGR);
+	    cv::cvtColor(depth_image_ocv,depth,cv::COLOR_BGRA2BGR);
+
+/////////////////////////////////socket>> image////////////////////////////////////////////////
+	    ///////////////////////////socke<<box///////////////////////////////////////////////
+	    //box: x(0-640),y(0-360),width(10-100),y(10-100)
+	    ////////////////////////////////////////////////////////////////////////////////////
+
+	    if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
+		drawBox(image,box);
+		cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
+		cv::imshow("KCF", image);
+		printf("image width:%d,height:%d\n",image.cols,image.rows);
+		printf("Initial Bounding Box = x:%d y:%d h:%d w:%d\n,size:%d", box.x, box.y, box.width, box.height,sizeof(box));	
+		UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);
+	    } else {
+		// First frame, give the groundtruth to the tracker
+		if(nframes<2) {
+		    nframes++;
+		    tracker.init(box, image);
+		}
+		if(nframes>=2) {
+		    result = tracker.update(image);
+		    /*		certrex[0] = result.x  >> 8;
+		    certrex[1] = result.x & 0xff;
+		    certrey[0] = result.y   >> 8;
+		    certrey[1] = result.y & 0xff;	
+		    */				
+		    certrex = (result.x+result.width/2)/2;
+		    certrey = (result.y+result.height/2)/2;
+		    data[0] = certrex  >> 8;;
+		    data[1] = certrex & 0x000000ff;
+		    data[2] = certrey   >> 8;
+		    data[3] = certrey & 0x000000ff;
+		    //						data[4] = (result.x +result.y)>>8;
+		    //						data[5] = (result.x +result.y)& 0x000000ff;	
+
+
+		    end[0] = 0x0D;
+		    end[1] = 0x0A;	
+		    UART0_Send(fd,data,4); 
+		    UART0_Send(fd,end,2); 
+		    sl::float4 point_cloud_value;
+		    point_cloud.getValue(certrex, certrey, &point_cloud_value);
+		    certrez = sqrt(point_cloud_value.x*point_cloud_value.x + point_cloud_value.y*point_cloud_value.y + point_cloud_value.z*point_cloud_value.z);
+		    printf("certrex:%d certrey:%d certrez:%.2f\n",certrex,certrey,certrez);
+		    //printf("%x,%x,%x,%x,%x,%x,%x,%x\n",data[0],data[1],data[2],data[3],end[0],end[1]);
+
+		    drawBox( image,result);
+		    
+		    ///////////////////////////socke>>result///////////////////////////////////////////////
+		    cv::putText(image," ESC: Exit Program!  r: Reset The Program! ",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
+		    cv::imshow("KCF", image);
+		    nframes=3;
+		}
+	    }
+	    cv::imshow("depth", depth);
+	    // Handle key event
+	    key = cv::waitKey(10);
+
+	    switch(key) {
+	    case 'r':gotBB = false;nframes = 0;break;
+	    case 'p':UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);cv::waitKey(5000);break;
+
+	    }
+
+	    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
+	    Fps = 1.0 / t;
+	    //printf("FPS: %.2f\n",Fps);
+	}
     }
     zed.close();
     return 0;
