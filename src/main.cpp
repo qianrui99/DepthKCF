@@ -21,7 +21,7 @@ History:   <author>    <date>   <modification>
 #include <sl_zed/Camera.hpp>
 
 // OpenCV includes
-#include "highgui.h"
+#include <opencv2/highgui.hpp>
 /*=======================================*/
 /*=========[ADD][OPENTLD][2017-6-2]=====================*/
 #include <iostream>
@@ -29,20 +29,24 @@ History:   <author>    <date>   <modification>
 
 #include "kcftracker.hpp"
 #include "usart.h"
+#include "cvserver.hpp"
 
 using namespace sl;
 
 
-#define FRAME_WIDTH  640
-#define FRAME_HEIGHT 480
-#define MIN_WIN 15  
+#define FRAME_WIDTH  320
+#define FRAME_HEIGHT 180
 
+
+
+SocketSever cvSocketServer;
 
 cv::Rect result(0,0,0,0);
-cv::Rect box(0,0,0,0); 
+cv::Rect box(10,0,0,0); 
 bool drawing_box = false;
 bool gotBB = false;
 
+cv::Mat tImage;
 
 /*=================Declare Function========================*/
 void drawBox(cv::Mat& image, cv::Rect box);
@@ -50,8 +54,78 @@ void mouseHandler(int event, int x, int y, int flags, void *param);
 cv::Mat slMat2cvMat(Mat& input);
 void printHelp();
 
+void *display(void *ptr);
+void *transmit(void *ptr);
+
 int main(int argc, char **argv) {
-	double t = 0;
+
+      
+
+      
+      int ssClient=0;
+/*
+	if(!cvSocketServer.setparam()){
+	    std::cout<<"Socket init error"<<std::endl;
+	}*/
+// 	ssClient = cvSocketServer.connect();
+// 	 if(ssClient<=0){
+// 	    std::cout<<"Socket connect error"<<std::endl;
+// 	}
+//     
+
+    int localSocket,remoteSocket,port = 8888;
+    struct sockaddr_in localAddr, remoteAddr;
+    pthread_t thread_id;
+    
+    int addrLen = sizeof(struct sockaddr_in);
+    localSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(localSocket == -1) {
+	std::perror("socket() call failed!");
+    }
+    
+    localAddr.sin_family = AF_INET;
+    localAddr.sin_addr.s_addr = INADDR_ANY;
+    localAddr.sin_port = htons( port);
+    
+    if(bind(localSocket,(struct sockaddr *)&localAddr, sizeof(localAddr))<0) {
+	std::perror("Can't bind() socket");
+	exit(1);
+    }
+    
+    listen(localSocket, 3);
+    std::cout<< "Waiting for connections...\n"
+	      << "Server Port:"<<port<<std::endl;
+    // Loop until 'q' is pressed
+    char key = ' ';
+    
+    while (key != 'q') {
+	
+
+/////////////////////////////////socket>> image////////////////////////////////////////////////
+	    ///////////////////////////socke<<box///////////////////////////////////////////////
+	    remoteSocket = accept(localSocket, (struct sockaddr *)&remoteAddr, (socklen_t*)&addrLen);
+	    
+	    if(remoteSocket <0) {
+		std::perror("accept failed");
+		exit(1);
+	    }
+	    std::cout << "Connection accepted"<< std::endl;
+
+	       pthread_create(&thread_id,NULL,display,&remoteSocket);
+	   
+	}
+    
+    return 0;
+}
+
+
+
+void *display(void *ptr){
+	int socket = *(int *)ptr;
+  
+	pthread_t thread_id;
+   
+  	double t = 0;
 	double Fps = 0;
 	/******局部变量定义****/
 	bool HOG = true;
@@ -65,10 +139,9 @@ int main(int argc, char **argv) {
 	cv::Point pos = cv::Point(20,20);				//The Position of Text
 /*========================*/
 //目标统计，检测到的目标数
-    int  nframes = 0;
-
-
-/*==========================USART===================================*/
+      int  nframes = 0;
+       char key = ' ';
+  /*==========================USART===================================*/
 	int fd;                            //文件描述符    
 	int len;       
 	unsigned char stopData[4]={0}; 
@@ -78,12 +151,10 @@ int main(int argc, char **argv) {
 	int checkout=0;		//checkout bits
 	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
 	UART0_Init(fd,115200,0,8,1,'N');
-/*==========================Socket===================================*/
-
-
-    
+	
+	
 /*==================================================================*/    
-	// Create KCFTracker object ......
+    // Create KCFTracker object ......
 	KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
 
 	
@@ -99,7 +170,7 @@ int main(int argc, char **argv) {
     if (err != SUCCESS) {
         printf("%s\n", toString(err).c_str());
         zed.close();
-        return 1; // Quit if an error occurred
+         // Quit if an error occurred
     }
 
     // Display help in console
@@ -122,11 +193,8 @@ int main(int argc, char **argv) {
     cv::Mat depth_image_ocv = slMat2cvMat(depth_image_zed);
     Mat point_cloud;
 
-    // Loop until 'q' is pressed
-    char key = ' ';
-    
-    cv::Mat image, grayImage, blurImage, depth;
-    while (key != 'q') {
+ cv::Mat image, grayImage, blurImage, depth;
+    while (true) {
 	if (zed.grab(runtime_parameters) == SUCCESS) {
 	    t = (double)cv::getTickCount(); 
 
@@ -146,17 +214,17 @@ int main(int argc, char **argv) {
 	    cv::cvtColor(image_ocv,image,cv::COLOR_BGRA2BGR);
 	    cv::cvtColor(depth_image_ocv,depth,cv::COLOR_BGRA2BGR);
 
-/////////////////////////////////socket>> image////////////////////////////////////////////////
-	    ///////////////////////////socke<<box///////////////////////////////////////////////
-	    //box: x(0-640),y(0-360),width(10-100),y(10-100)
-	    ////////////////////////////////////////////////////////////////////////////////////
 
-	    if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
+	    cv::imshow("KCF", image);
+	    image.copyTo(tImage);
+
+	     pthread_create(&thread_id,NULL,transmit,&socket);
+	    if(gotBB || std::min(box.width, box.height) < MIN_WIN)	{
 		drawBox(image,box);
 		cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
 		cv::imshow("KCF", image);
-		printf("image width:%d,height:%d\n",image.cols,image.rows);
-		printf("Initial Bounding Box = x:%d y:%d h:%d w:%d\n,size:%d", box.x, box.y, box.width, box.height,sizeof(box));	
+// 		printf("image width:%d,height:%d\n",image.cols,image.rows);
+// 		printf("Initial Bounding Box = x:%d y:%d h:%d w:%d\n,size:%d", box.x, box.y, box.width, box.height,sizeof(box));	
 		UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);
 	    } else {
 		// First frame, give the groundtruth to the tracker
@@ -200,22 +268,87 @@ int main(int argc, char **argv) {
 		}
 	    }
 	    cv::imshow("depth", depth);
+	    
+	    
+	    
 	    // Handle key event
 	    key = cv::waitKey(10);
 
 	    switch(key) {
 	    case 'r':gotBB = false;nframes = 0;break;
 	    case 'p':UART0_Send(fd,stopData,4); UART0_Send(fd,end,2);cv::waitKey(5000);break;
-
+	    case 's':zed.close();break;
 	    }
 
 	    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
 	    Fps = 1.0 / t;
 	    //printf("FPS: %.2f\n",Fps);
 	}
+	
     }
-    zed.close();
-    return 0;
+	
+		
+/*==========================Socket===================================*/
+
+ //cvSocketServer.sendcontral(box);
+}
+
+
+
+
+void *transmit(void *ptr){
+  int socket = *(int *)ptr;
+  int bytes =0;
+  size_t imgSize;
+  
+  cv::Mat img;
+  struct recvBuf data;
+	if(!tImage.empty()) {
+// 		if(!cvSocketServer.transmit(tImage,socket)){
+// 		    std::cout<<"transmit ok!"<<std::endl;
+// 		}
+// 		else{
+// 		    std::cout<<"transmit error!"<<std::endl;
+// 
+// 		}
+	 // cv::resize(tImage,img,cv::Size(640,360),0,0,CV_INTER_LINEAR);
+	  tImage.copyTo(img);  
+		if(img.empty()) {
+		      std::cout<<"empty image!"<<std::endl;
+		  }
+		  
+		  if(img.cols != IMG_WIDTH || img.rows != IMG_HEIGHT || img.type()!= CV_8UC3) {
+		      std::cout<<"the image mast satisfy : 320*180!"<<std::endl;
+		  }
+		std::cout<<img.cols<<","<<img.rows<<std::endl;
+		
+		
+		 size_t imgSize = img.cols*img.rows*3;
+		  for (int i = 0; i < PACKAGE_NUM; i++)
+		  {
+		      int num1 = IMG_HEIGHT / PACKAGE_NUM * i;
+		      for (int j = 0; j < IMG_HEIGHT / PACKAGE_NUM; j++)
+		      {
+			      int num2 = j * IMG_WIDTH * 3;
+			      uchar* ucdata = img.ptr<uchar>(j + num1);
+			      for (int k = 0; k < IMG_WIDTH * 3; k++)
+			      {
+				      data.buf[num2 + k] = ucdata[k];
+			      }
+		      }
+		      if (i == PACKAGE_NUM -1)
+			data.flag = 2;
+		      else
+			data.flag = 1;
+		      
+		      if(send(socket, (char*)(&data),sizeof(data),0) < 0){
+			printf("send fail\n");
+		      } 
+			  
+		  }
+		  
+	    cv::waitKey(30);
+	}
 }
 
 
@@ -259,7 +392,7 @@ void drawBox(cv::Mat& image, cv::Rect box){
 	cv::rectangle(image, cv::Point(box.x, box.y), cv::Point(box.x + box.width, box.y + box.height), cv::Scalar(0, 255, 255), 1,8);
 }
 
-//bounding box mouse callback
+// //bounding box mouse callback
 void mouseHandler(int event, int x, int y, int flags, void *param){
 	switch (event){
 		case CV_EVENT_MOUSEMOVE:
@@ -286,3 +419,5 @@ void mouseHandler(int event, int x, int y, int flags, void *param){
 			break;
 	}
 }
+
+

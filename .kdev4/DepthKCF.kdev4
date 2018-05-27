@@ -1,3 +1,6 @@
+[Buildset]
+BuildItems=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x01\x00\x00\x00\x0b\x00\x00\x00\x00\x01\x00\x00\x00\x10\x00D\x00e\x00p\x00t\x00h\x00K\x00C\x00F)
+
 [CMake]
 Build Directory Count=1
 Current Build Directory Index=0
@@ -5,11 +8,11 @@ ProjectRootRelative=./
 
 [CMake][CMake Build Directory 0]
 Build Directory Path=file:///home/nvidia/workspace/DepthKCF/build
-Build Type=Debug
+Build Type=
 CMake Binary=file:///usr/bin/cmake
 Environment Profile=
 Extra Arguments=
-Install Directory=
+Install Directory=file:///usr/local
 
 [Defines And Includes][Compiler]
 Name=GCC
