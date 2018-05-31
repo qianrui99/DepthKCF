@@ -17,6 +17,7 @@ History:   <author>    <date>   <modification>
 #include <stdio.h> 
 #include <unistd.h> 
 #include <stdlib.h> 
+#include <cstdlib>                // For atoi()
 #include <opencv2/opencv.hpp>
 #include <sl_zed/Camera.hpp>
 
@@ -30,6 +31,12 @@ History:   <author>    <date>   <modification>
 #include "kcftracker.hpp"
 #include "usart.h"
 #include "cvserver.hpp"
+
+
+
+#include "PracticalSocket.h" 
+
+#include "config.h"
 
 using namespace sl;
 
@@ -46,8 +53,6 @@ cv::Rect box(10,0,0,0);
 bool drawing_box = false;
 bool gotBB = false;
 
-cv::Mat tImage;
-
 /*=================Declare Function========================*/
 void drawBox(cv::Mat& image, cv::Rect box);
 void mouseHandler(int event, int x, int y, int flags, void *param);
@@ -57,120 +62,72 @@ void printHelp();
 void *display(void *ptr);
 void *transmit(void *ptr);
 
-int main(int argc, char **argv) {
 
-      
 
-      
-      int ssClient=0;
-/*
-	if(!cvSocketServer.setparam()){
-	    std::cout<<"Socket init error"<<std::endl;
-	}*/
-// 	ssClient = cvSocketServer.connect();
-// 	 if(ssClient<=0){
-// 	    std::cout<<"Socket connect error"<<std::endl;
-// 	}
-//     
 
-    int localSocket,remoteSocket,port = 8888;
-    struct sockaddr_in localAddr, remoteAddr;
-    pthread_t thread_id;
-    
-    int addrLen = sizeof(struct sockaddr_in);
-    localSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(localSocket == -1) {
-	std::perror("socket() call failed!");
+
+
+
+
+int main(int argc, char * argv[]) {
+    if ((argc < 3) || (argc > 3)) { // Test for correct number of arguments
+        cerr << "Usage: " << argv[0] << " <Server> <Server Port>\n";
+        exit(1);
     }
+    string servAddress = argv[1]; // First arg: server address
+    unsigned short servPort = Socket::resolveService(argv[2], "udp");
     
-    localAddr.sin_family = AF_INET;
-    localAddr.sin_addr.s_addr = INADDR_ANY;
-    localAddr.sin_port = htons( port);
     
-    if(bind(localSocket,(struct sockaddr *)&localAddr, sizeof(localAddr))<0) {
-	std::perror("Can't bind() socket");
-	exit(1);
-    }
     
-    listen(localSocket, 3);
-    std::cout<< "Waiting for connections...\n"
-	      << "Server Port:"<<port<<std::endl;
-    // Loop until 'q' is pressed
+    
+    
+//===================================tracker DEFINE=======================================//
+    double t = 0;
+    double Fps = 0;
+    /******局部变量定义****/
+    bool HOG = true;
+    bool FIXEDWINDOW = false;
+    bool MULTISCALE = true;
+    bool LAB = false;
+
+    int certrex,certrey;
+    float certrez=0;
+
+    cv::Point pos = cv::Point(20,20);				//The Position of Text
+    /*======================================================================*/
+    //目标统计，检测到的目标数
+    int  nframes = 0;
     char key = ' ';
-    
-    while (key != 'q') {
-	
-
-/////////////////////////////////socket>> image////////////////////////////////////////////////
-	    ///////////////////////////socke<<box///////////////////////////////////////////////
-	    remoteSocket = accept(localSocket, (struct sockaddr *)&remoteAddr, (socklen_t*)&addrLen);
-	    
-	    if(remoteSocket <0) {
-		std::perror("accept failed");
-		exit(1);
-	    }
-	    std::cout << "Connection accepted"<< std::endl;
-
-	       pthread_create(&thread_id,NULL,display,&remoteSocket);
-	   
-	}
-    
-    return 0;
-}
-
-
-
-void *display(void *ptr){
-	int socket = *(int *)ptr;
-  
-	pthread_t thread_id;
-   
-  	double t = 0;
-	double Fps = 0;
-	/******局部变量定义****/
-	bool HOG = true;
-	bool FIXEDWINDOW = false;
-	bool MULTISCALE = true;
-	bool LAB = false;
-	
-	int certrex,certrey;
-	float certrez=0;
-	
-	cv::Point pos = cv::Point(20,20);				//The Position of Text
-/*========================*/
-//目标统计，检测到的目标数
-      int  nframes = 0;
-       char key = ' ';
-  /*==========================USART===================================*/
-	int fd;                            //文件描述符    
-	int len;       
-	unsigned char stopData[4]={0}; 
-	unsigned char data[4]={0};  //send buffer for usart	
-	unsigned char end[2]={0};
-			   
-	int checkout=0;		//checkout bits
-	fd = UART0_Open(fd); //打开串口2，返回文件描述符    
-	UART0_Init(fd,115200,0,8,1,'N');
-	
-	
-/*==================================================================*/    
+    /*==========================USART===================================*/
+    int fd;                            //文件描述符    
+    int len;       
+    unsigned char stopData[4]={0}; 
+    unsigned char data[4]={0};  //send buffer for usart	
+    unsigned char end[2]={0};
+		      
+    int checkout=0;		//checkout bits
+    fd = UART0_Open(fd); //打开串口2，返回文件描述符    
+    UART0_Init(fd,115200,0,8,1,'N');
+	  
+    /*==================================================================*/    
     // Create KCFTracker object ......
-	KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
+    KCFTracker tracker(HOG, FIXEDWINDOW, MULTISCALE, LAB);
 
 	
-    // Create a ZED camera object
     Camera zed;
+
     // Set configuration parameters
     InitParameters init_params;
-    init_params.camera_resolution = RESOLUTION_HD720;   //RESOLUTION_VGA 100fps;RESOLUTION_HD720 60fps
-    init_params.depth_mode = DEPTH_MODE_PERFORMANCE;
-    init_params.coordinate_units = UNIT_METER;    
+    init_params.camera_resolution = RESOLUTION_HD720;  //RESOLUTION_VGA//RESOLUTION_HD720    VGA:336;188
+    init_params.depth_mode = DEPTH_MODE_MEDIUM;
+    init_params.coordinate_units = UNIT_METER;
+    
     // Open the camera
     ERROR_CODE err = zed.open(init_params);
     if (err != SUCCESS) {
         printf("%s\n", toString(err).c_str());
         zed.close();
-         // Quit if an error occurred
+	return 0 ;
     }
 
     // Display help in console
@@ -178,7 +135,7 @@ void *display(void *ptr){
 
     // Set runtime parameters after opening the camera
     RuntimeParameters runtime_parameters;
-    runtime_parameters.sensing_mode = SENSING_MODE_STANDARD;  //SENSING_MODE_STANDARD;   SENSING_MODE_FILL
+    runtime_parameters.sensing_mode = SENSING_MODE_FILL;  //SENSING_MODE_STANDARD;   SENSING_MODE_FILL
 
     // Prepare new image size to retrieve half-resolution images
     Resolution image_size = zed.getResolution();
@@ -193,13 +150,26 @@ void *display(void *ptr){
     cv::Mat depth_image_ocv = slMat2cvMat(depth_image_zed);
     Mat point_cloud;
 
- cv::Mat image, grayImage, blurImage, depth;
-    while (true) {
-	if (zed.grab(runtime_parameters) == SUCCESS) {
-	    t = (double)cv::getTickCount(); 
+    cv::Mat image, grayImage, blurImage, depth;
 
+    try {
+        UDPSocket sock;
+        int jpegqual =  ENCODE_QUALITY; // Compression Parameter
+
+        cv::Mat send;
+        std::vector < uchar > encoded;
+
+
+        clock_t last_cycle = clock();
+	char key = ' ';
+    
 	    cvNamedWindow("KCF", 1);
 	    cvSetMouseCallback("KCF", mouseHandler);
+	while (key != 'q')  {
+	  
+	  if (zed.grab(runtime_parameters) == SUCCESS) {
+	    t = (double)cv::getTickCount(); 
+
 
 
 	    // Retrieve the left image, depth image in half-resolution
@@ -216,10 +186,30 @@ void *display(void *ptr){
 
 
 	    cv::imshow("KCF", image);
-	    image.copyTo(tImage);
+	    
+	    
+	    
+//=========================================Transmit image with socket by UDP=======================================================//
+	    
+            if(image.size().width==0)
+	      continue;//simple integrity check; skip erroneous data...
+            cv::resize(image, send, cv::Size(FRAME_WIDTH, FRAME_HEIGHT), 0, 0, CV_INTER_LINEAR);
+            vector < int > compression_params;
+            compression_params.push_back(CV_IMWRITE_JPEG_QUALITY);
+            compression_params.push_back(jpegqual);
 
-	     pthread_create(&thread_id,NULL,transmit,&socket);
-	    if(gotBB || std::min(box.width, box.height) < MIN_WIN)	{
+            cv::imencode(".jpg", send, encoded, compression_params);
+            cv::imshow("send", send);
+            int total_pack = 1 + (encoded.size() - 1) / PACK_SIZE;
+
+            int ibuf[1];
+            ibuf[0] = total_pack;
+            sock.sendTo(ibuf, sizeof(int), servAddress, servPort);
+
+            for (int i = 0; i < total_pack; i++)
+                sock.sendTo( & encoded[i * PACK_SIZE], PACK_SIZE, servAddress, servPort);
+//=================================================================================================//
+	    if(!gotBB || std::min(box.width, box.height) < MIN_WIN)	{
 		drawBox(image,box);
 		cv::putText(image,"Select Target Block With Mouse",pos,cv::FONT_HERSHEY_TRIPLEX,0.4,(0,255,255),1,CV_AA);
 		cv::imshow("KCF", image);
@@ -282,74 +272,28 @@ void *display(void *ptr){
 
 	    t = ((double)cv::getTickCount() - t) / cv::getTickFrequency();
 	    Fps = 1.0 / t;
-	    //printf("FPS: %.2f\n",Fps);
+	    printf("FPS: %.2f\n",Fps);
+
+	  }
+        // Destructor closes the socket
 	}
-	
+
+    } catch (SocketException & e) {
+        cerr << e.what() << endl;
+        exit(1);
     }
-	
-		
-/*==========================Socket===================================*/
 
- //cvSocketServer.sendcontral(box);
+    return 0;
 }
 
 
 
 
-void *transmit(void *ptr){
-  int socket = *(int *)ptr;
-  int bytes =0;
-  size_t imgSize;
-  
-  cv::Mat img;
-  struct recvBuf data;
-	if(!tImage.empty()) {
-// 		if(!cvSocketServer.transmit(tImage,socket)){
-// 		    std::cout<<"transmit ok!"<<std::endl;
-// 		}
-// 		else{
-// 		    std::cout<<"transmit error!"<<std::endl;
-// 
-// 		}
-	 // cv::resize(tImage,img,cv::Size(640,360),0,0,CV_INTER_LINEAR);
-	  tImage.copyTo(img);  
-		if(img.empty()) {
-		      std::cout<<"empty image!"<<std::endl;
-		  }
-		  
-		  if(img.cols != IMG_WIDTH || img.rows != IMG_HEIGHT || img.type()!= CV_8UC3) {
-		      std::cout<<"the image mast satisfy : 320*180!"<<std::endl;
-		  }
-		std::cout<<img.cols<<","<<img.rows<<std::endl;
-		
-		
-		 size_t imgSize = img.cols*img.rows*3;
-		  for (int i = 0; i < PACKAGE_NUM; i++)
-		  {
-		      int num1 = IMG_HEIGHT / PACKAGE_NUM * i;
-		      for (int j = 0; j < IMG_HEIGHT / PACKAGE_NUM; j++)
-		      {
-			      int num2 = j * IMG_WIDTH * 3;
-			      uchar* ucdata = img.ptr<uchar>(j + num1);
-			      for (int k = 0; k < IMG_WIDTH * 3; k++)
-			      {
-				      data.buf[num2 + k] = ucdata[k];
-			      }
-		      }
-		      if (i == PACKAGE_NUM -1)
-			data.flag = 2;
-		      else
-			data.flag = 1;
-		      
-		      if(send(socket, (char*)(&data),sizeof(data),0) < 0){
-			printf("send fail\n");
-		      } 
-			  
-		  }
-		  
-	    cv::waitKey(30);
-	}
-}
+
+
+//=======================================Display thread============================================//
+//=================================================================================================//
+
 
 
 

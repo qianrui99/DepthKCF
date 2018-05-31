@@ -1,5 +1,5 @@
 SET(execName DepthKCF)
-CMAKE_MINIMUM_REQUIRED(VERSION 2.4)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 PROJECT(${execName})
 
 if(COMMAND cmake_policy)
@@ -12,7 +12,6 @@ SET(EXECUTABLE_OUTPUT_PATH ".")
 find_package(ZED 2 REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(CUDA ${ZED_CUDA_VERSION} EXACT REQUIRED)
-
 IF(NOT WIN32)
     add_definitions(-Wno-format-extra-args)
     SET(SPECIAL_OS_LIBS "pthread" "X11")
@@ -22,6 +21,7 @@ include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${ZED_INCLUDE_DIRS})
 include_directories(${OPENCV_INCLUDE_DIRS})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
+include_directories("/usr/include/eigen3")
 
 link_directories(${ZED_LIBRARY_DIR})
 link_directories(${OpenCV_LIBRARY_DIRS})
